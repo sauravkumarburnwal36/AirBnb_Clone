@@ -1,6 +1,7 @@
 package com.explorebnb.clone.airBnbApp.service;
 
 import com.explorebnb.clone.airBnbApp.dto.HotelDto;
+import com.explorebnb.clone.airBnbApp.dto.HotelInfoDto;
 import com.explorebnb.clone.airBnbApp.entity.Hotel;
 
 public interface HotelService {
@@ -14,4 +15,6 @@ public interface HotelService {
     public void deleteHotelById(Long id);
 
     void activateHotel(Long hotelId);
+
+    HotelInfoDto getHotelInfoById(Long hotelId);
 }
