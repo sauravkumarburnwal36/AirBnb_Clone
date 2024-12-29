@@ -2,6 +2,7 @@ package com.explorebnb.clone.airBnbApp.service;
 
 import com.explorebnb.clone.airBnbApp.dto.BookingDto;
 import com.explorebnb.clone.airBnbApp.dto.BookingRequestDto;
+import com.explorebnb.clone.airBnbApp.dto.GuestDto;
 import com.explorebnb.clone.airBnbApp.entity.*;
 import com.explorebnb.clone.airBnbApp.entity.enums.BookingStatus;
 import com.explorebnb.clone.airBnbApp.exception.ResourceNotFoundException;
@@ -13,6 +14,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -49,8 +51,6 @@ public class BookingServiceImpl implements BookingService {
             inventory.setReservedCount(inventory.getReservedCount()+bookingRequestDto.getRoomCounts());
         }
         inventoryRepository.saveAll(inventoryList);
-        User user=new User();
-        user.setId(1L);
         //create the booking
 
         Booking booking=Booking.builder()
@@ -61,10 +61,45 @@ public class BookingServiceImpl implements BookingService {
                 .checkInDate(bookingRequestDto.getCheckInDate())
                 .checkOutDate(bookingRequestDto.getCheckOutDate())
                 .roomCounts(bookingRequestDto.getRoomCounts())
-                .user(user)
+                .user(getCurrentUser())
                 .build();
         bookingRepository.save(booking);
 
         return modelMapper.map(booking, BookingDto.class);
+    }
+
+    @Override
+    @Transactional
+    public BookingDto addGuests(Long bookingId, List<GuestDto> guestDtoList) {
+        log.info("Adding guests for booking id:{}",bookingId);
+        Booking booking=bookingRepository.findById(bookingId).orElseThrow(()->
+                new ResourceNotFoundException("Booking with id:"+bookingId+" not found"));
+        if(hasBookingExpired(booking))
+        {
+            throw new IllegalStateException("Booking has been expired");
+        }
+        if(booking.getBookingStatus()!=BookingStatus.RESERVED)
+        {
+            throw new IllegalStateException("Booking status is not in reserved state,cannot add guests");
+        }
+        for(GuestDto guestDto:guestDtoList){
+            Guest guest=modelMapper.map(guestDto,Guest.class);
+           guest.setUser(getCurrentUser());
+            guest=guestRepository.save(guest);
+            booking.getGuests().add(guest);
+        }
+        booking.setBookingStatus(BookingStatus.GUESTS_ADDED);
+        booking=bookingRepository.save(booking);
+        return modelMapper.map(booking,BookingDto.class);
+    }
+
+    private boolean hasBookingExpired(Booking booking){
+        return booking.getCreatedAt().plusMinutes(10).isBefore(LocalDateTime.now());
+    }
+
+    private User getCurrentUser(){
+        User user=new User();
+        user.setId(1L);
+        return user;
     }
 }
