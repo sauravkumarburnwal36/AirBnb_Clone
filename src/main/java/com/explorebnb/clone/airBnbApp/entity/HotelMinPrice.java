@@ -1,51 +1,43 @@
 package com.explorebnb.clone.airBnbApp.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
 @Setter
-public class Room {
-
+@NoArgsConstructor
+public class HotelMinPrice {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-
-    @ManyToOne(fetch=FetchType.LAZY)
+    @ManyToOne(fetch =FetchType.LAZY)
     @JoinColumn(name = "hotel_id",nullable = false)
     private Hotel hotel;
 
-    @Column(nullable = false,precision =10,scale =2)
-    private BigDecimal basePrice;
-
     @Column(nullable = false)
-    private String type;
+    private LocalDate date;
 
-    @Column(columnDefinition ="TEXT[]")
-    private String[] photos;
-
-    @Column(columnDefinition ="TEXT[]")
-    private String[] amenities;
+    @Column(nullable = false,precision=10,scale=2)
+    private BigDecimal price;//cheapest price of hotel on that day
 
     @CreationTimestamp
-    @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    @Column(nullable = false)
-    private Integer totalCount;
-
-    @Column(nullable = false)
-    private Integer capacity;
+    public HotelMinPrice(Hotel hotel,LocalDate date){
+        this.hotel=hotel;
+        this.date=date;
+    }
 }
