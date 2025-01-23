@@ -6,6 +6,7 @@ import com.explorebnb.clone.airBnbApp.entity.Inventory;
 import com.explorebnb.clone.airBnbApp.entity.Room;
 import com.explorebnb.clone.airBnbApp.repository.HotelMinPriceRepository;
 import com.explorebnb.clone.airBnbApp.repository.InventoryRepository;
+import com.explorebnb.clone.airBnbApp.repository.RoomRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -22,6 +23,7 @@ import java.time.temporal.ChronoUnit;
 @RequiredArgsConstructor
 @Slf4j
 public class InventoryServiceImpl implements InventoryService{
+    private final RoomRepository roomRepository;
     private final ModelMapper modelMapper;
     private final InventoryRepository inventoryRepository;
     private final HotelMinPriceRepository hotelMinPriceRepository;
@@ -48,13 +50,14 @@ public class InventoryServiceImpl implements InventoryService{
 
     @Override
     public void deleteAllInventories(Room room) {
+        log.info("Deleting the inventories of room with id: {}", room.getId());
         inventoryRepository.deleteByRoom(room);
     }
 
     @Override
     public Page<HotelPriceDto> searchHotels(HotelSearchRequestDto hotelSearchRequestDto) {
-        log.info("Searching Hotels using pagination and filter:{},{},{},{}",hotelSearchRequestDto.getCity()
-        ,hotelSearchRequestDto.getStartDate(),hotelSearchRequestDto.getEndDate(),hotelSearchRequestDto.getRoomCounts());
+        log.info("Searching Hotels using pagination and filter:{},{},{}",hotelSearchRequestDto.getCity()
+        ,hotelSearchRequestDto.getStartDate(),hotelSearchRequestDto.getEndDate());
         Pageable pageable=PageRequest.of(hotelSearchRequestDto.getPageNumber(),hotelSearchRequestDto.getSize());
         Long dateCount=ChronoUnit.DAYS.between(hotelSearchRequestDto.getStartDate(),hotelSearchRequestDto.getEndDate())+1;
         //business logic -90 days

@@ -41,7 +41,9 @@ public class RoomServiceImpl implements RoomService{
         room.setHotel(hotel);
         room=roomRepository.save(room);
         //ToDO: Create the Inventory as room is created
-        inventoryService.initializeRoomForAYear(room);
+        if (hotel.getActive()) {
+            inventoryService.initializeRoomForAYear(room);
+        }
         return modelMapper.map(room,RoomDto.class);
     }
 
@@ -82,4 +84,5 @@ public class RoomServiceImpl implements RoomService{
         roomRepository.deleteById(roomId);
         //Delete the future inventory for this room
     }
+
 }
