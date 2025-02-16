@@ -1,5 +1,6 @@
 package com.explorebnb.clone.airBnbApp.repository;
 
+import com.explorebnb.clone.airBnbApp.dto.RoomPriceDto;
 import com.explorebnb.clone.airBnbApp.entity.Hotel;
 import com.explorebnb.clone.airBnbApp.entity.Inventory;
 import com.explorebnb.clone.airBnbApp.entity.Room;
@@ -12,6 +13,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -55,6 +57,7 @@ public interface InventoryRepository extends JpaRepository<Inventory,Long> {
 
     List<Inventory> findByHotelAndDateBetween(Hotel hotel, LocalDate startDate, LocalDate endDate);
 
+    List<Inventory> findByRoomOrderByDate(Room room);
     @Query("""
             SELECT i
             FROM Inventory i
@@ -108,4 +111,52 @@ public interface InventoryRepository extends JpaRepository<Inventory,Long> {
             """)
     void cancelBooking(@Param("roomId") Long roomId,@Param("startDate") LocalDate startDate,
                        @Param("endDate") LocalDate endDate,@Param("numberOfRooms") Integer numberOfRooms);
+
+    @Modifying
+    @Query("""
+            UPDATE Inventory i
+            SET i.surgeFactor=:surgeFactor,
+            i.closed=:closed
+            where i.room.id=:roomId
+            AND i.date BETWEEN :startDate and :endDate
+            """)
+    void updateInventory(@Param("roomId")Long roomId, @Param("startDate") LocalDate startDate
+    , @Param("endDate") LocalDate endDate, @Param("surgeFactor")BigDecimal surgeFactor,
+                       @Param("closed") Boolean closed);
+
+
+    @Query("""
+            SELECT i
+            FROM Inventory i
+            WHERE i.room.id=:roomId
+            AND i.date BETWEEN :startDate and :endDate
+            """)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    void findInventoryAndLockBeforeUpdate(@Param("roomId") Long roomId,
+                                         @Param("startDate")LocalDate startDate,
+                                         @Param("endDate")LocalDate endDate);
+
+    @Query("""
+       SELECT new com.explorebnb.clone.airBnbApp.dto.RoomPriceDto(
+            i.room,
+            CASE
+                WHEN COUNT(i) = :dateCount THEN AVG(i.price)
+                ELSE NULL
+            END
+        )
+       FROM Inventory i
+       WHERE i.hotel.id = :hotelId
+             AND i.date BETWEEN :startDate AND :endDate
+             AND (i.totalCount - i.bookedCount) >= :roomsCount
+             AND i.closed = false
+       GROUP BY i.room
+       """)
+    List<RoomPriceDto> findRoomAveragePrice(
+            @Param("hotelId") Long hotelId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("roomsCount") Long roomsCount,
+            @Param("dateCount") Long dateCount
+    );
+
 }

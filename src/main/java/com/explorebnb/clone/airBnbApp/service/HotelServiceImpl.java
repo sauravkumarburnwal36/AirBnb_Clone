@@ -1,8 +1,6 @@
 package com.explorebnb.clone.airBnbApp.service;
 
-import com.explorebnb.clone.airBnbApp.dto.HotelDto;
-import com.explorebnb.clone.airBnbApp.dto.HotelInfoDto;
-import com.explorebnb.clone.airBnbApp.dto.RoomDto;
+import com.explorebnb.clone.airBnbApp.dto.*;
 import com.explorebnb.clone.airBnbApp.entity.Hotel;
 import com.explorebnb.clone.airBnbApp.entity.Room;
 import com.explorebnb.clone.airBnbApp.entity.User;
@@ -18,9 +16,12 @@ import org.modelmapper.ModelMapper;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static com.explorebnb.clone.airBnbApp.util.AppUtils.getCurrentUser;
 
 @Service
 @Slf4j
@@ -114,11 +115,33 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
-    public HotelInfoDto getHotelInfoById(Long hotelId) {
+    public HotelInfoDto getHotelInfoById(Long hotelId, HotelInfoRequestDto hotelInfoRequestDto) {
         Hotel hotel=hotelRepository.findById(hotelId).orElseThrow(()->new ResourceNotFoundException(
                 "Hotel with id:"+hotelId+" doesn't exist."));
-        List<RoomDto> roomDtos= hotel.getRooms().stream().map((element) -> modelMapper.map(element, RoomDto.class))
+        long daysCount = ChronoUnit.DAYS.between(hotelInfoRequestDto.getStartDate(), hotelInfoRequestDto.getEndDate())+1;
+        List<RoomPriceDto> roomPriceDtoList = inventoryRepository.findRoomAveragePrice(hotelId,
+                hotelInfoRequestDto.getStartDate(), hotelInfoRequestDto.getEndDate(),
+                hotelInfoRequestDto.getRoomsCount(), daysCount);
+
+        List<RoomPriceResponseDto> rooms = roomPriceDtoList.stream()
+                .map(roomPriceDto -> {
+                    RoomPriceResponseDto roomPriceResponseDto = modelMapper.map(roomPriceDto.getRoom(),
+                            RoomPriceResponseDto.class);
+                    roomPriceResponseDto.setPrice(roomPriceDto.getPrice());
+                    return roomPriceResponseDto;
+                })
                 .collect(Collectors.toList());
-        return new HotelInfoDto(modelMapper.map(hotel,HotelDto.class),roomDtos);
+
+        return new HotelInfoDto(modelMapper.map(hotel, HotelDto.class), rooms);
+
+    }
+
+    @Override
+    public List<HotelDto> getAllHotels() {
+        User user=getCurrentUser();
+        log.info("Fetching All Hotels having user with Id:{}",user.getId());
+        List<Hotel> hotels=hotelRepository.findByOwner(user);
+        return hotels.stream().map(element->modelMapper.map(element,HotelDto.class))
+                .collect(Collectors.toList());
     }
 }

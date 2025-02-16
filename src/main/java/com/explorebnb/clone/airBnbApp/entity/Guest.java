@@ -7,6 +7,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -24,13 +25,17 @@ public class Guest {
 
     @Column(nullable = false)
     private String name;
-
-    @Column(nullable = false,unique = true)
-    private String email;
+;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Gender gender;
 
-    @Column(nullable = false)
-    private Integer age;
+    private LocalDate dateOfBirth;
+
+    @CreationTimestamp
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
+
 }

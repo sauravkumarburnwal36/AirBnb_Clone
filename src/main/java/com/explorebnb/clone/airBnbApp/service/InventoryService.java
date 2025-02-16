@@ -1,9 +1,10 @@
 package com.explorebnb.clone.airBnbApp.service;
 
-import com.explorebnb.clone.airBnbApp.dto.HotelPriceDto;
-import com.explorebnb.clone.airBnbApp.dto.HotelSearchRequestDto;
+import com.explorebnb.clone.airBnbApp.dto.*;
 import com.explorebnb.clone.airBnbApp.entity.Room;
 import org.springframework.data.domain.Page;
+
+import java.util.List;
 
 
 public interface InventoryService {
@@ -13,5 +14,9 @@ public interface InventoryService {
     void deleteAllInventories(Room room);
 
 
-    Page<HotelPriceDto> searchHotels(HotelSearchRequestDto hotelSearchRequestDto);
+    Page<HotelPriceResponseDto> searchHotels(HotelSearchRequestDto hotelSearchRequestDto);
+
+    List<InventoryDto> getAllInventoryByRoom(Long roomId);
+
+    void updateInventory(Long roomId, UpdateInventoryRequestDto updateInventoryRequestDto);
 }
