@@ -12,11 +12,14 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static com.explorebnb.clone.airBnbApp.util.AppUtils.getCurrentUser;
 
 @Service
 @RequiredArgsConstructor
@@ -83,6 +86,25 @@ public class RoomServiceImpl implements RoomService{
         inventoryService.deleteAllInventories(room);
         roomRepository.deleteById(roomId);
         //Delete the future inventory for this room
+    }
+
+    @Override
+    @Transactional
+    public RoomDto updateRoomById(Long hotelId, Long roomId, RoomDto roomDto) {
+        log.info("Updating Room with ID:{} in hotel with Id:{}",roomId,hotelId);
+        Hotel hotel=hotelRepository.findById(hotelId).orElseThrow(()->new ResourceNotFoundException(
+                "Hotel note found with id:"+hotelId));
+        User user=getCurrentUser();
+        if(!user.equals(hotel.getOwner())){
+            throw new UnAuthorisedException("You are not the owner of this hotel");
+        }
+        Room room=roomRepository.findById(roomId).orElseThrow(()->new ResourceNotFoundException(
+                "Room not found with id:"+roomId));
+        modelMapper.map(roomDto,room);
+        room.setId(roomId);
+        //:TODO if price or inventory is updated ,then update the inventory for this room
+        room=roomRepository.save(room);
+        return modelMapper.map(room,RoomDto.class);
     }
 
 }

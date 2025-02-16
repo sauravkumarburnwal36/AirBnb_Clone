@@ -1,15 +1,17 @@
 package com.explorebnb.clone.airBnbApp.dto;
 
+import com.explorebnb.clone.airBnbApp.entity.Room;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class HotelInfoDto {
-    private HotelDto hotel;
-    private List<RoomPriceResponseDto> room;
+public class RoomPriceDto {
+    private Room room;
+    private Double price;
 }
+
+
+

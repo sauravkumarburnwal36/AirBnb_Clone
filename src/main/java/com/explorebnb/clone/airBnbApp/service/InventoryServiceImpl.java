@@ -1,23 +1,30 @@
 package com.explorebnb.clone.airBnbApp.service;
 
-import com.explorebnb.clone.airBnbApp.dto.HotelPriceDto;
-import com.explorebnb.clone.airBnbApp.dto.HotelSearchRequestDto;
+import com.explorebnb.clone.airBnbApp.dto.*;
 import com.explorebnb.clone.airBnbApp.entity.Inventory;
 import com.explorebnb.clone.airBnbApp.entity.Room;
+import com.explorebnb.clone.airBnbApp.entity.User;
+import com.explorebnb.clone.airBnbApp.exception.ResourceNotFoundException;
 import com.explorebnb.clone.airBnbApp.repository.HotelMinPriceRepository;
 import com.explorebnb.clone.airBnbApp.repository.InventoryRepository;
 import com.explorebnb.clone.airBnbApp.repository.RoomRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static com.explorebnb.clone.airBnbApp.util.AppUtils.getCurrentUser;
 
 @Service
 @RequiredArgsConstructor
@@ -55,7 +62,7 @@ public class InventoryServiceImpl implements InventoryService{
     }
 
     @Override
-    public Page<HotelPriceDto> searchHotels(HotelSearchRequestDto hotelSearchRequestDto) {
+    public Page<HotelPriceResponseDto> searchHotels(HotelSearchRequestDto hotelSearchRequestDto) {
         log.info("Searching Hotels using pagination and filter:{},{},{}",hotelSearchRequestDto.getCity()
         ,hotelSearchRequestDto.getStartDate(),hotelSearchRequestDto.getEndDate());
         Pageable pageable=PageRequest.of(hotelSearchRequestDto.getPageNumber(),hotelSearchRequestDto.getSize());
@@ -65,7 +72,41 @@ public class InventoryServiceImpl implements InventoryService{
                 hotelSearchRequestDto.getCity(),hotelSearchRequestDto.getStartDate(),
                 hotelSearchRequestDto.getEndDate(),hotelSearchRequestDto.getRoomCounts(),
                 dateCount,pageable);
-        return hotelPage;
+        return hotelPage.map(hotelPriceDto -> {
+            HotelPriceResponseDto hotelPriceResponseDto = modelMapper.map(hotelPriceDto.getHotel(), HotelPriceResponseDto.class);
+            hotelPriceResponseDto.setPrice(hotelPriceDto.getPrice());
+            return hotelPriceResponseDto;
+        });
+    }
+
+    @Override
+    public List<InventoryDto> getAllInventoryByRoom(Long roomId) {
+        log.info("Fetching all inventory for room with id:{}",roomId);
+        Room room=roomRepository.findById(roomId).orElseThrow(()->
+                new ResourceNotFoundException("Room not found with id:"+roomId));
+        User user=getCurrentUser();
+        if(!user.equals(room.getHotel().getOwner())){
+            throw new AccessDeniedException("You are not the owner of room with id:"+roomId);
+        }
+        return inventoryRepository.findByRoomOrderByDate(room).stream()
+                .map(element->modelMapper.map(element,InventoryDto.class))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void updateInventory(Long roomId, UpdateInventoryRequestDto updateInventoryRequestDto) {
+        log.info("Updating Inventory for room id:{} between date range{} and {}",roomId,updateInventoryRequestDto.getStartDate(),updateInventoryRequestDto.getEndDate());
+        Room room=roomRepository.findById(roomId).orElseThrow(()->
+                new ResourceNotFoundException("Room not found with id:"+roomId));
+        User user=getCurrentUser();
+        if(!user.equals(room.getHotel().getOwner())){
+            throw new AccessDeniedException("You are not the owner of room with id:"+roomId);
+        }
+        inventoryRepository.findInventoryAndLockBeforeUpdate(roomId,updateInventoryRequestDto.getStartDate(),updateInventoryRequestDto.getEndDate());
+        inventoryRepository.updateInventory(roomId,updateInventoryRequestDto.getStartDate(),
+                updateInventoryRequestDto.getEndDate(),updateInventoryRequestDto.getSurgeFactor()
+        ,updateInventoryRequestDto.getClosed());
     }
 
 

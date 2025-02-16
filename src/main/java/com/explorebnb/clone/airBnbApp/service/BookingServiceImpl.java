@@ -3,6 +3,7 @@ package com.explorebnb.clone.airBnbApp.service;
 import com.explorebnb.clone.airBnbApp.dto.BookingDto;
 import com.explorebnb.clone.airBnbApp.dto.BookingRequestDto;
 import com.explorebnb.clone.airBnbApp.dto.GuestDto;
+import com.explorebnb.clone.airBnbApp.dto.HotelReportDto;
 import com.explorebnb.clone.airBnbApp.entity.*;
 import com.explorebnb.clone.airBnbApp.entity.enums.BookingStatus;
 import com.explorebnb.clone.airBnbApp.exception.ResourceNotFoundException;
@@ -18,14 +19,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import static com.explorebnb.clone.airBnbApp.util.AppUtils.getCurrentUser;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -76,14 +83,14 @@ public class BookingServiceImpl implements BookingService {
                 .roomCounts(bookingRequestDto.getRoomCounts())
                 .user(getCurrentUser())
                 .build();
-        bookingRepository.save(booking);
+       booking= bookingRepository.save(booking);
 
         return modelMapper.map(booking, BookingDto.class);
     }
 
     @Override
     @Transactional
-    public BookingDto addGuests(Long bookingId, List<GuestDto> guestDtoList) {
+    public BookingDto addGuests(Long bookingId, List<Long> guestIdList) {
         log.info("Adding guests for booking id:{}",bookingId);
         Booking booking=bookingRepository.findById(bookingId).orElseThrow(()->
                 new ResourceNotFoundException("Booking with id:"+bookingId+" not found"));
@@ -99,10 +106,9 @@ public class BookingServiceImpl implements BookingService {
         {
             throw new IllegalStateException("Booking status is not in reserved state,cannot add guests");
         }
-        for(GuestDto guestDto:guestDtoList){
-            Guest guest=modelMapper.map(guestDto,Guest.class);
-           guest.setUser(user);
-            guest=guestRepository.save(guest);
+        for(Long guestId:guestIdList){
+            Guest guest=guestRepository.findById(guestId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Guest not found with id: "+guestId));
             booking.getGuests().add(guest);
         }
         booking.setBookingStatus(BookingStatus.GUESTS_ADDED);
@@ -124,7 +130,9 @@ public class BookingServiceImpl implements BookingService {
         {
             throw new IllegalStateException("Booking has already expired");
         }
-        String sessionUrl=checkoutService.getCheckoutSession(booking,frontendUrl+"/payments/success",frontendUrl+"/payments/failure");
+        String sessionUrl=checkoutService.getCheckoutSession(booking,
+                frontendUrl+"/payments"+bookingId+"/status",
+                frontendUrl+"/payments"+bookingId+"/status");
         booking.setBookingStatus(BookingStatus.PAYMENT_PENDING);
         bookingRepository.save(booking);
         return sessionUrl;
@@ -156,7 +164,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public String getBookingStatus(Long bookingId) {
+    public BookingStatus getBookingStatus(Long bookingId) {
         Booking booking=bookingRepository.findById(bookingId).orElseThrow(
                 ()->new ResourceNotFoundException("Booking with id:"+bookingId+ "not founed"));
         User user=getCurrentUser();
@@ -164,7 +172,7 @@ public class BookingServiceImpl implements BookingService {
         {
             throw new UnAuthorisedException("Booking  does not belong to this user with id:"+user.getId());
         }
-        return booking.getBookingStatus().name();
+        return booking.getBookingStatus();
     }
 
     @Override
@@ -198,11 +206,54 @@ public class BookingServiceImpl implements BookingService {
 
     }
 
+    @Override
+    public List<BookingDto> getAllBookingsByHotelId(Long hotelId) {
+        Hotel hotel=hotelRepository.findById(hotelId).orElseThrow(()->
+                new ResourceNotFoundException("Hotel not found with id:"+hotelId));
+        log.info("Fetching all bookings for hotel with id:{}",hotelId);
+        User user=getCurrentUser();
+        if(!hotel.getOwner().equals(user)){
+            throw new AccessDeniedException("You are not the owner of hotel with id:"+hotelId);
+        }
+        List<Booking> bookings=bookingRepository.findByHotel(hotel);
+        return bookings.stream().map(element->modelMapper.map(
+                element,BookingDto.class
+        )).collect(Collectors.toList());
+    }
+
+    @Override
+    public HotelReportDto getHotelReport(Long hotelId, LocalDate startDate, LocalDate endDate) {
+        Hotel hotel=hotelRepository.findById(hotelId).orElseThrow(()->new ResourceNotFoundException(
+                "Hotel not found with id:"+hotelId));
+        log.info("Generating report for hotel with id:{}",hotelId);
+        User user=getCurrentUser();
+        if(!user.equals(hotel.getOwner())){
+            throw new AccessDeniedException("You are not the owner of hotel with id:"+hotelId);
+        }
+        LocalDateTime startDateTime=startDate.atStartOfDay();
+        LocalDateTime endDateTime=endDate.atTime(LocalTime.MAX);
+        List<Booking> bookings=bookingRepository.findByHotelAndCreatedAtBetween(hotel,startDateTime,endDateTime);
+        Long totalConfirmedBookings=bookings.stream().
+                filter(booking->booking.getBookingStatus().equals(BookingStatus.CONFIRMED)).count();
+        BigDecimal totalRevenueOfConfirmedBookings=bookings.stream().filter(
+                booking->booking.getBookingStatus().equals(BookingStatus.CONFIRMED))
+                .map(Booking::getAmount)
+                .reduce(BigDecimal.ZERO,BigDecimal::add);
+        BigDecimal averageRevenueOfConfirmedBookings=totalConfirmedBookings==0?BigDecimal.ZERO:totalRevenueOfConfirmedBookings.divide(
+                BigDecimal.valueOf(totalConfirmedBookings), RoundingMode.HALF_UP);
+        return new HotelReportDto(totalConfirmedBookings,totalRevenueOfConfirmedBookings,averageRevenueOfConfirmedBookings);
+    }
+
+    @Override
+    public List<BookingDto> getMyBookings() {
+        User user=getCurrentUser();
+
+        return bookingRepository.findByUser(user).stream().map(element->modelMapper.map(element,BookingDto.class))
+                .collect(Collectors.toList());
+    }
+
     private boolean hasBookingExpired(Booking booking){
         return booking.getCreatedAt().plusMinutes(10).isBefore(LocalDateTime.now());
     }
 
-    private User getCurrentUser(){
-        return (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-    }
 }
